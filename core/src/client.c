@@ -13,7 +13,6 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
-/* Shared memory support code */
 static void
 randname(char *buf)
 {
@@ -60,7 +59,6 @@ allocate_shm_file(size_t size)
     return fd;
 }
 
-/* Wayland code */
 struct client_state {
     /* Globals */
     struct wl_display *wl_display;
@@ -72,6 +70,10 @@ struct client_state {
     struct wl_surface *wl_surface;
     struct xdg_surface *xdg_surface;
     struct xdg_toplevel *xdg_toplevel;
+	/* SHM metadata */
+    struct wl_shm_pool *shm_pool;
+    uint32_t *shm_data;
+    int shm_size;
 	/* Data for rendering image */
 	const char *image_path;
 };
@@ -79,8 +81,19 @@ struct client_state {
 static void
 wl_buffer_release(void *data, struct wl_buffer *wl_buffer)
 {
-    /* Sent by the compositor when it's no longer using this buffer */
+    struct client_state *state = data;
+
     wl_buffer_destroy(wl_buffer);
+
+    if (state->shm_pool) {
+        wl_shm_pool_destroy(state->shm_pool);
+        state->shm_pool = NULL;
+    }
+    if (state->shm_data) {
+        munmap(state->shm_data, state->shm_size);
+        state->shm_data = NULL;
+        state->shm_size = 0;
+    }
 }
 
 static const struct wl_buffer_listener wl_buffer_listener = {
@@ -90,6 +103,15 @@ static const struct wl_buffer_listener wl_buffer_listener = {
 static struct wl_buffer *
 draw_frame(struct client_state *state)
 {
+	if (access(state->image_path, F_OK) == -1) {
+	    fprintf(stderr, "Error: File '%s' does not exist\n", state->image_path);
+	    return NULL;
+	}
+	if (access(state->image_path, R_OK) == -1) {
+	    fprintf(stderr, "Error: File '%s' is not readable\n", state->image_path);
+	    return NULL;
+	}
+
     int width, height, channels;
     unsigned char *img_data = stbi_load(state->image_path, &width, &height, &channels, 4);
 
@@ -143,9 +165,11 @@ draw_frame(struct client_state *state)
 
     stbi_image_free(img_data);
 
-    munmap(data, size);
-    wl_shm_pool_destroy(pool);
-    wl_buffer_add_listener(buffer, &wl_buffer_listener, NULL);
+    state->shm_pool = pool;
+    state->shm_data = data;
+    state->shm_size = size;
+
+    wl_buffer_add_listener(buffer, &wl_buffer_listener, state);
 
     return buffer;
 }
