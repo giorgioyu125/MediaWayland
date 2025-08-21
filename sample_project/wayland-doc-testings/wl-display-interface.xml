@@ -1,0 +1,28 @@
+<interface name="wl_display" version="1">
+  <request name="sync">
+    <arg name="callback" type="new_id" interface="wl_callback"
+       summary="callback object for the sync request"/>
+  </request>
+
+  <request name="get_registry">
+    <arg name="registry" type="new_id" interface="wl_registry"
+      summary="global registry object"/>
+  </request>
+
+  <event name="error">
+    <arg name="object_id" type="object" summary="object where the error occurred"/>
+    <arg name="code" type="uint" summary="error code"/>
+    <arg name="message" type="string" summary="error description"/>
+  </event>
+
+  <enum name="error">
+    <entry name="invalid_object" value="0" />
+    <entry name="invalid_method" value="1" />
+    <entry name="no_memory" value="2" />
+    <entry name="implementation" value="3" />
+  </enum>
+
+  <event name="delete_id">
+    <arg name="id" type="uint" summary="deleted object ID"/>
+  </event>
+</interface>
